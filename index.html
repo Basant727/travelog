@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam with Custom Background</title>
+    <style>
+        #video {
+            width: 640px;
+            height: 480px;
+            border: 1px solid black;
+        }
+        #canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Webcam with Custom Background</h1>
+    <video id="video" autoplay></video>
+    <canvas id="canvas"></canvas>
+    <input type="file" id="bgUpload" accept="image/*">
+    <button onclick="applyBackground()">Apply Background</button>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const bgInput = document.getElementById('bgUpload');
+        const ctx = canvas.getContext('2d');
+        let bgImage = null;
+
+        // Access the webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(error => {
+                console.error("Error accessing webcam: ", error);
+            });
+
+        // Load background image from user input
+        bgInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = () => bgImage = img;
+            }
+        });
+
+        // Apply background replacement using BodyPix
+        async function applyBackground() {
+            const net = await bodyPix.load();
+            const segmentation = await net.segmentPerson(video);
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            if (bgImage) {
+                ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixel = imageData.data;
+
+            segmentation.data.forEach((person, i) => {
+                if (person) {
+                    pixel[i * 4 + 3] = 255; // Set opacity for person pixels
+                } else {
+                    pixel[i * 4 + 3] = 0; // Set transparency for background pixels
+                }
+            });
+
+            ctx.putImageData(imageData, 0, 0);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+    </script>
+</body>
+</html>
